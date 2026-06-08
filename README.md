@@ -1,8 +1,8 @@
-# 🚗 Simulador de Trânsito Inteligente
+# Simulador de Trânsito Inteligente
 
 Simulador de trânsito multiagente com algoritmos de busca (BFS, DFS, Greedy, A*), semáforos inteligentes e recálculo dinâmico de rotas.
 
-**IMD3001 — Introdução à Inteligência Artificial (IMD-UFRN)**
+**IMD3001 - Introdução à Inteligência Artificial (IMD-UFRN)**
 
 ## Sobre
 
@@ -37,10 +37,10 @@ python src/main.py
 
 | Algoritmo | Tipo | Prioridade | Ótimo? |
 |-----------|------|-----------|--------|
-| BFS | Busca cega | FIFO | ✅ |
-| DFS | Busca cega | LIFO | ❌ |
-| Greedy | Informada | h(n) | ❌ |
-| A* | Informada | g(n)+h(n) | ✅ |
+| BFS | Busca cega | FIFO | S |
+| DFS | Busca cega | LIFO | N |
+| Greedy | Informada | h(n) | N |
+| A* | Informada | g(n)+h(n) | S |
 
 ## Referências
 
