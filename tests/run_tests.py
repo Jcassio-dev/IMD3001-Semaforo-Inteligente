@@ -42,6 +42,18 @@ TESTES = [
     test_bfs_custo_com_congestionamento,
     test_bfs_tempo_medido,
     test_bfs_menor_numero_de_passos,
+    # DFS
+    test_dfs_retorna_resultado,
+    test_dfs_encontra_caminho_simples,
+    test_dfs_encontra_caminho_grid,
+    test_dfs_caminho_valido_sem_saltos,
+    test_dfs_origem_igual_destino,
+    test_dfs_sem_caminho,
+    test_dfs_nos_expandidos,
+    test_dfs_custo_total,
+    test_dfs_custo_com_congestionamento,
+    test_dfs_tempo_medido,
+    test_dfs_nao_repete_nos,
 ]
 
 if __name__ == "__main__":

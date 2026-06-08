@@ -50,6 +50,50 @@ def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
     )
 
 
+def dfs(grid: Grid, inicio: No, destino: No) -> Resultado:
+    if inicio == destino:
+        return Resultado(
+            algoritmo=Algoritmo.DFS,
+            caminho=[inicio],
+            encontrou=True,
+            nos_expandidos=0,
+            custo_total=0.0,
+        )
+
+    with Timer() as t:
+        pilha: list[tuple[No, list[No]]] = [(inicio, [inicio])]
+        visitados: set[No] = {inicio}
+        nos_expandidos = 0
+
+        while pilha:
+            atual, caminho = pilha.pop()
+            nos_expandidos += 1
+
+            if atual == destino:
+                custo = _calcular_custo(grid, caminho)
+                return Resultado(
+                    algoritmo=Algoritmo.DFS,
+                    caminho=caminho,
+                    encontrou=True,
+                    nos_expandidos=nos_expandidos,
+                    custo_total=custo,
+                    tempo_ms=t.tempo_ms,
+                )
+
+            for vizinho in grid.vizinhos(atual):
+                if vizinho not in visitados:
+                    visitados.add(vizinho)
+                    pilha.append((vizinho, caminho + [vizinho]))
+
+    return Resultado(
+        algoritmo=Algoritmo.DFS,
+        caminho=[],
+        encontrou=False,
+        nos_expandidos=nos_expandidos,
+        tempo_ms=t.tempo_ms,
+    )
+
+
 def _calcular_custo(grid: Grid, caminho: list[No]) -> float:
     return sum(
         grid.peso(caminho[i], caminho[i + 1])
