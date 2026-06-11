@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from grid import Grid
 from modelos import Algoritmo, Resultado
-from algoritmos import bfs, dfs
+from algoritmos import bfs, dfs, greedy_best_first
 
 
 def test_bfs_retorna_resultado():
@@ -172,3 +172,94 @@ def test_dfs_nao_repete_nos():
     g = Grid(5, 5)
     r = dfs(g, (0, 0), (4, 4))
     assert len(r.caminho) == len(set(r.caminho))
+
+
+# Greedy Best-First Search
+
+def test_greedy_retorna_resultado():
+    g = Grid(3, 3)
+    r = greedy_best_first(g, (0, 0), (2, 2))
+    assert isinstance(r, Resultado)
+    assert r.algoritmo == Algoritmo.GREEDY
+
+
+def test_greedy_encontra_caminho_simples():
+    g = Grid(3, 3)
+    r = greedy_best_first(g, (0, 0), (0, 1))
+    assert r.encontrou is True
+    assert r.caminho[0] == (0, 0)
+    assert r.caminho[-1] == (0, 1)
+
+
+def test_greedy_encontra_caminho_grid():
+    g = Grid(5, 5)
+    r = greedy_best_first(g, (0, 0), (4, 4))
+    assert r.encontrou is True
+    assert r.caminho[0] == (0, 0)
+    assert r.caminho[-1] == (4, 4)
+
+
+def test_greedy_caminho_valido_sem_saltos():
+    g = Grid(5, 5)
+    r = greedy_best_first(g, (0, 0), (4, 4))
+    for i in range(len(r.caminho) - 1):
+        a, b = r.caminho[i], r.caminho[i + 1]
+        assert b in g.vizinhos(a), f"{b} nao e vizinho de {a}"
+
+
+def test_greedy_origem_igual_destino():
+    g = Grid(3, 3)
+    r = greedy_best_first(g, (1, 1), (1, 1))
+    assert r.encontrou is True
+    assert r.caminho == [(1, 1)]
+
+
+def test_greedy_sem_caminho():
+    g = Grid(3, 3)
+    g.bloquear_aresta((0, 0), (0, 1))
+    g.bloquear_aresta((0, 0), (1, 0))
+    r = greedy_best_first(g, (0, 0), (2, 2))
+    assert r.encontrou is False
+    assert r.caminho == []
+
+
+def test_greedy_nos_expandidos():
+    g = Grid(5, 5)
+    r = greedy_best_first(g, (0, 0), (4, 4))
+    assert r.nos_expandidos > 0
+
+
+def test_greedy_custo_total():
+    g = Grid(3, 3, peso_base=1.0)
+    r = greedy_best_first(g, (0, 0), (0, 2))
+    assert r.encontrou is True
+    assert r.custo_total > 0
+
+
+def test_greedy_custo_com_congestionamento():
+    g = Grid(3, 3, peso_base=1.0)
+    g.incrementar_congestionamento((0, 0), (0, 1))
+    r = greedy_best_first(g, (0, 0), (0, 2))
+    assert r.encontrou is True
+    assert r.custo_total > 0
+
+
+def test_greedy_tempo_medido():
+    g = Grid(5, 5)
+    r = greedy_best_first(g, (0, 0), (4, 4))
+    assert r.tempo_ms >= 0
+
+
+def test_greedy_nao_repete_nos():
+    g = Grid(5, 5)
+    r = greedy_best_first(g, (0, 0), (4, 4))
+    assert len(r.caminho) == len(set(r.caminho))
+
+
+def test_greedy_usa_heuristica_manhattan():
+    """Greedy deve expandir menos nós que BFS em grid aberto, pois é guiado pela heurística."""
+    g = Grid(10, 10)
+    r_greedy = greedy_best_first(g, (0, 0), (9, 9))
+    r_bfs = bfs(g, (0, 0), (9, 9))
+    assert r_greedy.encontrou is True
+    assert r_greedy.nos_expandidos <= r_bfs.nos_expandidos

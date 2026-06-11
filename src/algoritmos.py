@@ -1,8 +1,9 @@
 from __future__ import annotations
+import heapq
 from collections import deque
 
 from grid import Grid
-from modelos import Algoritmo, Resultado, Timer, No
+from modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
 
 
 def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
@@ -87,6 +88,54 @@ def dfs(grid: Grid, inicio: No, destino: No) -> Resultado:
 
     return Resultado(
         algoritmo=Algoritmo.DFS,
+        caminho=[],
+        encontrou=False,
+        nos_expandidos=nos_expandidos,
+        tempo_ms=t.tempo_ms,
+    )
+
+
+def greedy_best_first(grid: Grid, inicio: No, destino: No) -> Resultado:
+    if inicio == destino:
+        return Resultado(
+            algoritmo=Algoritmo.GREEDY,
+            caminho=[inicio],
+            encontrou=True,
+            nos_expandidos=0,
+            custo_total=0.0,
+        )
+
+    with Timer() as t:
+        contador = 0
+        fila: list[tuple[float, int, No, list[No]]] = []
+        heapq.heappush(fila, (heuristica_manhattan(inicio, destino), contador, inicio, [inicio]))
+        visitados: set[No] = {inicio}
+        nos_expandidos = 0
+
+        while fila:
+            _h, _c, atual, caminho = heapq.heappop(fila)
+            nos_expandidos += 1
+
+            if atual == destino:
+                custo = _calcular_custo(grid, caminho)
+                return Resultado(
+                    algoritmo=Algoritmo.GREEDY,
+                    caminho=caminho,
+                    encontrou=True,
+                    nos_expandidos=nos_expandidos,
+                    custo_total=custo,
+                    tempo_ms=t.tempo_ms,
+                )
+
+            for vizinho in grid.vizinhos(atual):
+                if vizinho not in visitados:
+                    visitados.add(vizinho)
+                    contador += 1
+                    h = heuristica_manhattan(vizinho, destino)
+                    heapq.heappush(fila, (h, contador, vizinho, caminho + [vizinho]))
+
+    return Resultado(
+        algoritmo=Algoritmo.GREEDY,
         caminho=[],
         encontrou=False,
         nos_expandidos=nos_expandidos,

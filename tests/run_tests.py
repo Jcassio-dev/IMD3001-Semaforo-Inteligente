@@ -54,6 +54,19 @@ TESTES = [
     test_dfs_custo_com_congestionamento,
     test_dfs_tempo_medido,
     test_dfs_nao_repete_nos,
+    # Greedy Best-First Search
+    test_greedy_retorna_resultado,
+    test_greedy_encontra_caminho_simples,
+    test_greedy_encontra_caminho_grid,
+    test_greedy_caminho_valido_sem_saltos,
+    test_greedy_origem_igual_destino,
+    test_greedy_sem_caminho,
+    test_greedy_nos_expandidos,
+    test_greedy_custo_total,
+    test_greedy_custo_com_congestionamento,
+    test_greedy_tempo_medido,
+    test_greedy_nao_repete_nos,
+    test_greedy_usa_heuristica_manhattan,
 ]
 
 if __name__ == "__main__":
