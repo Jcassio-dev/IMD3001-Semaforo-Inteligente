@@ -4,7 +4,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..', 'src'))
 
 from grid import Grid
 from modelos import Algoritmo, Resultado
-from algoritmos import bfs, dfs, greedy_best_first
+from algoritmos import bfs, dfs, greedy_best_first, a_estrela
 
 
 def test_bfs_retorna_resultado():
@@ -263,3 +263,122 @@ def test_greedy_usa_heuristica_manhattan():
     r_bfs = bfs(g, (0, 0), (9, 9))
     assert r_greedy.encontrou is True
     assert r_greedy.nos_expandidos <= r_bfs.nos_expandidos
+
+
+# A* Search
+
+def test_astar_retorna_resultado():
+    g = Grid(3, 3)
+    r = a_estrela(g, (0, 0), (2, 2))
+    assert isinstance(r, Resultado)
+    assert r.algoritmo == Algoritmo.A_ESTRELA
+
+
+def test_astar_encontra_caminho_simples():
+    g = Grid(3, 3)
+    r = a_estrela(g, (0, 0), (0, 1))
+    assert r.encontrou is True
+    assert r.caminho == [(0, 0), (0, 1)]
+
+
+def test_astar_encontra_caminho_grid():
+    g = Grid(5, 5)
+    r = a_estrela(g, (0, 0), (4, 4))
+    assert r.encontrou is True
+    assert r.caminho[0] == (0, 0)
+    assert r.caminho[-1] == (4, 4)
+
+
+def test_astar_caminho_valido_sem_saltos():
+    g = Grid(5, 5)
+    r = a_estrela(g, (0, 0), (4, 4))
+    for i in range(len(r.caminho) - 1):
+        a, b = r.caminho[i], r.caminho[i + 1]
+        assert b in g.vizinhos(a), f"{b} nao e vizinho de {a}"
+
+
+def test_astar_origem_igual_destino():
+    g = Grid(3, 3)
+    r = a_estrela(g, (1, 1), (1, 1))
+    assert r.encontrou is True
+    assert r.caminho == [(1, 1)]
+
+
+def test_astar_sem_caminho():
+    g = Grid(3, 3)
+    g.bloquear_aresta((0, 0), (0, 1))
+    g.bloquear_aresta((0, 0), (1, 0))
+    r = a_estrela(g, (0, 0), (2, 2))
+    assert r.encontrou is False
+    assert r.caminho == []
+
+
+def test_astar_nos_expandidos():
+    g = Grid(5, 5)
+    r = a_estrela(g, (0, 0), (4, 4))
+    assert r.nos_expandidos > 0
+
+
+def test_astar_custo_otimo():
+    """A* deve encontrar o caminho de menor custo real em grid uniforme."""
+    g = Grid(5, 5, peso_base=1.0)
+    r = a_estrela(g, (0, 0), (4, 4))
+    assert r.encontrou is True
+    # Caminho otimo em grid uniforme: 8 arestas de peso 1.0
+    assert r.custo_total == 8.0
+
+
+def test_astar_custo_com_congestionamento():
+    """A* deve considerar congestionamento no custo."""
+    g = Grid(3, 3, peso_base=1.0)
+    for _ in range(10):
+        g.incrementar_congestionamento((0, 0), (0, 1))
+        g.incrementar_congestionamento((0, 1), (0, 2))
+    r = a_estrela(g, (0, 0), (0, 2))
+    assert r.encontrou is True
+    assert r.custo_total > 0
+
+
+def test_astar_tempo_medido():
+    g = Grid(5, 5)
+    r = a_estrela(g, (0, 0), (4, 4))
+    assert r.tempo_ms >= 0
+
+
+def test_astar_nao_repete_nos():
+    g = Grid(5, 5)
+    r = a_estrela(g, (0, 0), (4, 4))
+    assert len(r.caminho) == len(set(r.caminho))
+
+
+def test_astar_otimalidade_vs_bfs():
+    """A* deve ter custo <= ao custo do BFS (BFS minimiza saltos, nao custo)."""
+    g = Grid(5, 5, peso_base=1.0)
+    r_astar = a_estrela(g, (0, 0), (4, 4))
+    r_bfs = bfs(g, (0, 0), (4, 4))
+    assert r_astar.encontrou is True
+    assert r_astar.custo_total <= r_bfs.custo_total
+
+
+def test_astar_custo_melhor_que_dfs():
+    """A* garante custo otimo; DFS nao. Em grid grande, A* deve ter custo <= DFS."""
+    g = Grid(10, 10, peso_base=1.0)
+    r_astar = a_estrela(g, (0, 0), (9, 9))
+    r_dfs = dfs(g, (0, 0), (9, 9))
+    assert r_astar.encontrou is True
+    assert r_astar.custo_total <= r_dfs.custo_total
+
+
+def test_astar_desvia_congestionamento():
+    """Num cenario com congestionamento, A* deve preferir rotas mais baratas."""
+    g = Grid(5, 5, peso_base=1.0)
+    # Caminho direto pela linha 0 fica muito caro
+    for _ in range(20):
+        g.incrementar_congestionamento((0, 0), (0, 1))
+        g.incrementar_congestionamento((0, 1), (0, 2))
+        g.incrementar_congestionamento((0, 2), (0, 3))
+        g.incrementar_congestionamento((0, 3), (0, 4))
+    r = a_estrela(g, (0, 0), (0, 4))
+    assert r.encontrou is True
+    # Se desviou, o caminho tera mais que 5 nos (caminho direto = 5 nos)
+    assert len(r.caminho) > 5
