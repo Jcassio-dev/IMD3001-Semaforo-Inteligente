@@ -40,6 +40,130 @@ CAR_COLORS = [
     (0, 163, 136),
 ]
 
+# ------------------------------------------------------------------
+# Compatibilidade com testes legados de visualizacao
+# ------------------------------------------------------------------
+
+_MARGEM = 60
+_CONGESTIONAMENTO_MAX = 10
+_COR_FLUXO_LIVRE = (40, 200, 80)
+_COR_FLUXO_MODERADO = (230, 200, 70)
+_COR_FLUXO_CRITICO = (220, 70, 70)
+
+
+def _lerp_cor(cor_a: tuple[int, int, int], cor_b: tuple[int, int, int], t: float) -> tuple[int, int, int]:
+    t = max(0.0, min(1.0, t))
+    return (
+        int(cor_a[0] + (cor_b[0] - cor_a[0]) * t),
+        int(cor_a[1] + (cor_b[1] - cor_a[1]) * t),
+        int(cor_a[2] + (cor_b[2] - cor_a[2]) * t),
+    )
+
+
+def _cor_congestionamento(nivel: int) -> tuple[int, int, int]:
+    nivel_clamp = max(0, min(_CONGESTIONAMENTO_MAX, nivel))
+    frac = nivel_clamp / _CONGESTIONAMENTO_MAX
+    if frac <= 0.5:
+        t = frac / 0.5
+        return _lerp_cor(_COR_FLUXO_LIVRE, _COR_FLUXO_MODERADO, t)
+    t = (frac - 0.5) / 0.5
+    return _lerp_cor(_COR_FLUXO_MODERADO, _COR_FLUXO_CRITICO, t)
+
+
+def _pos_tela(
+    no: tuple[int, int],
+    largura: int,
+    altura: int,
+    linhas: int,
+    colunas: int,
+) -> tuple[int, int]:
+    i, j = no
+    if colunas <= 1:
+        x = _MARGEM
+    else:
+        x = int(_MARGEM + (j / (colunas - 1)) * (largura - 2 * _MARGEM))
+
+    if linhas <= 1:
+        y = _MARGEM
+    else:
+        y = int(_MARGEM + (i / (linhas - 1)) * (altura - 2 * _MARGEM))
+    return x, y
+
+
+def iniciar_pygame(largura: int = 1100, altura: int = 760) -> tuple[pygame.Surface, pygame.font.Font]:
+    pygame.init()
+    tela = pygame.display.set_mode((largura, altura))
+    fonte = pygame.font.SysFont("consolas", 16)
+    return tela, fonte
+
+
+def processar_eventos() -> bool:
+    for event in pygame.event.get():
+        if event.type == pygame.QUIT:
+            return False
+        if event.type == pygame.KEYDOWN and event.key == pygame.K_ESCAPE:
+            return False
+    return True
+
+
+def encerrar_pygame() -> None:
+    pygame.quit()
+
+
+def desenhar_frame(
+    tela: pygame.Surface,
+    fonte: pygame.font.Font,
+    grid,
+    posicoes_veiculos: list[tuple[int, int]] | None = None,
+    passo: int = 0,
+) -> None:
+    largura, altura = tela.get_size()
+    tela.fill((32, 38, 44))
+
+    # desenha arestas com cor de congestionamento
+    for i in range(grid.linhas):
+        for j in range(grid.colunas):
+            origem = (i, j)
+            x1, y1 = _pos_tela(origem, largura, altura, grid.linhas, grid.colunas)
+            for destino in grid.vizinhos(origem):
+                if origem < destino:
+                    x2, y2 = _pos_tela(destino, largura, altura, grid.linhas, grid.colunas)
+                    if grid.aresta_bloqueada(origem, destino):
+                        cor = (200, 60, 60)
+                        esp = 6
+                    else:
+                        nivel = grid.get_congestionamento(origem, destino)
+                        cor = _cor_congestionamento(nivel)
+                        esp = 4
+                    pygame.draw.line(tela, cor, (x1, y1), (x2, y2), esp)
+
+    # desenha nos
+    for i in range(grid.linhas):
+        for j in range(grid.colunas):
+            x, y = _pos_tela((i, j), largura, altura, grid.linhas, grid.colunas)
+            pygame.draw.circle(tela, (90, 100, 114), (x, y), 9)
+
+    # desenha semaforos
+    for no, sem in grid.semaforos.items():
+        x, y = _pos_tela(no, largura, altura, grid.linhas, grid.colunas)
+        estado = getattr(sem, "estado", None)
+        cor = (100, 180, 100)
+        if estado == EstadoSemaforo.VERMELHO:
+            cor = (215, 70, 70)
+        elif estado == EstadoSemaforo.AMARELO:
+            cor = (230, 190, 70)
+        pygame.draw.circle(tela, cor, (x, y), 6)
+
+    # desenha veiculos
+    if posicoes_veiculos:
+        for idx, no in enumerate(posicoes_veiculos):
+            x, y = _pos_tela(no, largura, altura, grid.linhas, grid.colunas)
+            pygame.draw.circle(tela, CAR_COLORS[idx % len(CAR_COLORS)], (x, y), 7)
+
+    txt = fonte.render(f"Passo: {passo}", True, (232, 236, 239))
+    tela.blit(txt, (12, 10))
+    pygame.display.flip()
+
 
 @dataclass
 class InputBox:
