@@ -67,6 +67,21 @@ TESTES = [
     test_greedy_tempo_medido,
     test_greedy_nao_repete_nos,
     test_greedy_usa_heuristica_manhattan,
+    # A* Search
+    test_astar_retorna_resultado,
+    test_astar_encontra_caminho_simples,
+    test_astar_encontra_caminho_grid,
+    test_astar_caminho_valido_sem_saltos,
+    test_astar_origem_igual_destino,
+    test_astar_sem_caminho,
+    test_astar_nos_expandidos,
+    test_astar_custo_otimo,
+    test_astar_custo_com_congestionamento,
+    test_astar_tempo_medido,
+    test_astar_nao_repete_nos,
+    test_astar_otimalidade_vs_bfs,
+    test_astar_custo_melhor_que_dfs,
+    test_astar_desvia_congestionamento,
 ]
 
 if __name__ == "__main__":
