@@ -2,8 +2,12 @@ from __future__ import annotations
 import heapq
 from collections import deque
 
-from grid import Grid
-from modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
+try:
+    from .grid import Grid
+    from .modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
+except ImportError:
+    from grid import Grid
+    from modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
 
 
 def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
