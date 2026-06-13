@@ -2,8 +2,12 @@ from __future__ import annotations
 import heapq
 from collections import deque
 
-from grid import Grid
-from modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
+try:
+    from .grid import Grid
+    from .modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
+except ImportError:
+    from grid import Grid
+    from modelos import Algoritmo, Resultado, Timer, No, heuristica_manhattan
 
 
 def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
@@ -136,6 +140,57 @@ def greedy_best_first(grid: Grid, inicio: No, destino: No) -> Resultado:
 
     return Resultado(
         algoritmo=Algoritmo.GREEDY,
+        caminho=[],
+        encontrou=False,
+        nos_expandidos=nos_expandidos,
+        tempo_ms=t.tempo_ms,
+    )
+
+
+def a_estrela(grid: Grid, inicio: No, destino: No) -> Resultado:
+    if inicio == destino:
+        return Resultado(
+            algoritmo=Algoritmo.A_ESTRELA,
+            caminho=[inicio],
+            encontrou=True,
+            nos_expandidos=0,
+            custo_total=0.0,
+        )
+
+    with Timer() as t:
+        contador = 0
+        # fila: (f, contador, g, no, caminho)
+        fila: list[tuple[float, int, float, No, list[No]]] = []
+        g_inicio = 0.0
+        h_inicio = heuristica_manhattan(inicio, destino)
+        heapq.heappush(fila, (g_inicio + h_inicio, contador, g_inicio, inicio, [inicio]))
+        custo_ate: dict[No, float] = {inicio: 0.0}
+        nos_expandidos = 0
+
+        while fila:
+            _f, _c, g_atual, atual, caminho = heapq.heappop(fila)
+            nos_expandidos += 1
+
+            if atual == destino:
+                return Resultado(
+                    algoritmo=Algoritmo.A_ESTRELA,
+                    caminho=caminho,
+                    encontrou=True,
+                    nos_expandidos=nos_expandidos,
+                    custo_total=g_atual,
+                    tempo_ms=t.tempo_ms,
+                )
+
+            for vizinho in grid.vizinhos(atual):
+                novo_g = g_atual + grid.peso(atual, vizinho)
+                if vizinho not in custo_ate or novo_g < custo_ate[vizinho]:
+                    custo_ate[vizinho] = novo_g
+                    h = heuristica_manhattan(vizinho, destino)
+                    contador += 1
+                    heapq.heappush(fila, (novo_g + h, contador, novo_g, vizinho, caminho + [vizinho]))
+
+    return Resultado(
+        algoritmo=Algoritmo.A_ESTRELA,
         caminho=[],
         encontrou=False,
         nos_expandidos=nos_expandidos,
