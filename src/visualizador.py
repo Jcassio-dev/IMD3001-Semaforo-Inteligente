@@ -708,34 +708,36 @@ class Visualizador:
                         bloqueada = self.sim.grid.aresta_bloqueada(origem, destino)
                         self._draw_road_segment((ox, oy), (dx, dy), blocked=bloqueada)
 
+        # Rota/trail apenas no hover
         _RECALC_SHOW = 30
-        for idx, carro in enumerate(self.sim.carros):
-            if carro.chegou:
-                continue
-            cor = CAR_COLORS[idx % len(CAR_COLORS)]
-            r2, g2, b2 = cor
-            is_hovered = (self._hover_car_idx == idx)
+        hover_idx = self._hover_car_idx
+        if hover_idx is not None and hover_idx < len(self.sim.carros):
+            carro_h = self.sim.carros[hover_idx]
+            cor_h = CAR_COLORS[hover_idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor_h
+            bright = (min(255, r2 + 60), min(255, g2 + 60), min(255, b2 + 60))
 
-            recalc_tick = self.sim._recalc_ticks.get(carro.id, -999)
-            ticks_since = self.sim.ticks - recalc_tick
-            if carro.prev_rota and 0 <= ticks_since < _RECALC_SHOW:
-                fade = 1.0 - ticks_since / _RECALC_SHOW
-                pr, pg, pb = int(r2 * fade * 0.55), int(g2 * fade * 0.55), int(b2 * fade * 0.55)
-                prev = carro.prev_rota
-                for k in range(len(prev) - 1):
-                    self._draw_dashed_line(self.screen, (pr, pg, pb), to_px(prev[k]), to_px(prev[k + 1]), width=3)
-
-            restante = carro.rota_restante
-            if len(restante) < 2:
-                continue
-            if is_hovered:
-                lw = 5
-                rc = (min(255, r2 + 60), min(255, g2 + 60), min(255, b2 + 60))
+            if carro_h.chegou:
+                # Mostra o caminho completo percorrido
+                full = self.sim._full_trails.get(carro_h.id, [])
+                if len(full) >= 2:
+                    pts = [to_px(n) for n in full]
+                    pygame.draw.lines(self.screen, bright, False, pts, 4)
             else:
-                lw = 2
-                rc = (max(20, r2 // 3), max(20, g2 // 3), max(20, b2 // 3))
-            for k in range(len(restante) - 1):
-                pygame.draw.line(self.screen, rc, to_px(restante[k]), to_px(restante[k + 1]), lw)
+                # Rota anterior ao recalculo (tracejada desbotando)
+                recalc_tick = self.sim._recalc_ticks.get(carro_h.id, -999)
+                ticks_since = self.sim.ticks - recalc_tick
+                if carro_h.prev_rota and 0 <= ticks_since < _RECALC_SHOW:
+                    fade = 1.0 - ticks_since / _RECALC_SHOW
+                    dc = (int(r2 * fade * 0.6), int(g2 * fade * 0.6), int(b2 * fade * 0.6))
+                    prev = carro_h.prev_rota
+                    for k in range(len(prev) - 1):
+                        self._draw_dashed_line(self.screen, dc, to_px(prev[k]), to_px(prev[k + 1]), width=3)
+                # Rota planejada restante
+                restante = carro_h.rota_restante
+                if len(restante) >= 2:
+                    pts = [to_px(n) for n in restante]
+                    pygame.draw.lines(self.screen, bright, False, pts, 4)
 
         for (origem, destino), ticks_rest in self.sim.incidentes_ativos.items():
             ox, oy = to_px(origem)
@@ -755,33 +757,6 @@ class Visualizador:
         for semaforo in self.sim.semaforos:
             x, y = to_px(semaforo.no)
             self._draw_traffic_light_sprite(x + 15, y - 16, semaforo.estado)
-
-        # Polilinha completa do caminho percorrido (sempre visivel)
-        for idx, carro in enumerate(self.sim.carros):
-            cor = CAR_COLORS[idx % len(CAR_COLORS)]
-            r2, g2, b2 = cor
-            full = self.sim._full_trails.get(carro.id, [])
-            if len(full) >= 2:
-                pts = [to_px(n) for n in full]
-                is_hovered = (self._hover_car_idx == idx)
-                if is_hovered:
-                    pygame.draw.lines(self.screen, (min(255, r2 + 50), min(255, g2 + 50), min(255, b2 + 50)), False, pts, 4)
-                else:
-                    pygame.draw.lines(self.screen, (max(15, r2 // 4), max(15, g2 // 4), max(15, b2 // 4)), False, pts, 2)
-
-        # Circulo de presenca recente (glow perto do carro)
-        for idx, carro in enumerate(self.sim.carros):
-            cor = CAR_COLORS[idx % len(CAR_COLORS)]
-            r2, g2, b2 = cor
-            trail = self.sim._trails.get(carro.id, [])
-            n = len(trail)
-            for t, no in enumerate(trail[:-1]):
-                tx, ty = to_px(no)
-                alpha = int(140 * (t + 1) / n)
-                radius = max(2, 5 - (n - t - 1))
-                surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
-                pygame.draw.circle(surf, (r2, g2, b2, alpha), (radius, radius), radius)
-                self.screen.blit(surf, (tx - radius, ty - radius))
 
         # Marcadores de destino
         for idx, carro in enumerate(self.sim.carros):

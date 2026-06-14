@@ -4,7 +4,7 @@ from dataclasses import dataclass
 import random
 
 try:
-    from .agente_carro import AgenteCarro
+    from .agente_carro import AgenteCarro, EstadoCarro
     from .agente_semaforo import AgenteSemaforo
     from .grid import Grid
     from .modelos import Algoritmo, Direcao
@@ -12,7 +12,7 @@ try:
     from .acidentes import SistemaAcidentes
     from .metricas import ColetorMetricas
 except ImportError:
-    from agente_carro import AgenteCarro
+    from agente_carro import AgenteCarro, EstadoCarro
     from agente_semaforo import AgenteSemaforo
     from grid import Grid
     from modelos import Algoritmo, Direcao
@@ -71,6 +71,7 @@ class Simulacao:
         self._full_trails: dict[int, list[No]] = {}
         self._heatmap: dict[No, int] = {}
         self._recalc_ticks: dict[int, int] = {}
+        self._ticks_bloqueado: dict[int, int] = {}
 
         self._congestionamento = SistemaCongestionamento(self.grid)
         self._acidentes = SistemaAcidentes(
@@ -175,6 +176,7 @@ class Simulacao:
         self._trails = {}
         self._full_trails = {}
         self._heatmap = {}
+        self._ticks_bloqueado = {}
         self._criar_semaforos(self.config.num_semaforos)
         self._criar_carros(self.config.num_carros, self.config.algoritmo_carros)
 
@@ -200,6 +202,7 @@ class Simulacao:
             pos_antes = carro.posicao_atual
             rota_antes = tuple(carro.rota)
             recalculos_antes = carro.recalculos
+            proximo_antes = carro.proximo_no
 
             # Remove posição atual do conjunto antes de tentar mover
             ocupados.discard(pos_antes)
@@ -211,10 +214,27 @@ class Simulacao:
 
             if moveu:
                 movimentos += 1
+                self._ticks_bloqueado[carro.id] = 0
                 if carro.ultimo_resultado:
                     self.metricas.registrar(carro.ultimo_resultado, carro.recalculos)
             elif carro.bloqueado:
                 carro.recalcular_rota()
+                self._ticks_bloqueado[carro.id] = 0
+            else:
+                # Detecta bloqueio por tráfego: em rota, tinha próximo nó, mas não avançou
+                bloqueado_trafico = (
+                    proximo_antes is not None
+                    and carro.estado == EstadoCarro.EM_ROTA
+                    and carro.recalculos == recalculos_antes
+                )
+                if bloqueado_trafico:
+                    cnt = self._ticks_bloqueado.get(carro.id, 0) + 1
+                    self._ticks_bloqueado[carro.id] = cnt
+                    if cnt >= 5:
+                        carro.recalcular_rota()
+                        self._ticks_bloqueado[carro.id] = 0
+                else:
+                    self._ticks_bloqueado[carro.id] = 0
 
             if carro.recalculos > recalculos_antes:
                 self._recalc_ticks[carro.id] = self.ticks
