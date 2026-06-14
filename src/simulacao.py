@@ -69,6 +69,7 @@ class Simulacao:
         self._telemetria: dict[int, TelemetriaCarro] = {}
         self._trails: dict[int, list[No]] = {}
         self._heatmap: dict[No, int] = {}
+        self._recalc_ticks: dict[int, int] = {}
 
         self._congestionamento = SistemaCongestionamento(self.grid)
         self._acidentes = SistemaAcidentes(
@@ -168,6 +169,9 @@ class Simulacao:
             seed=self.config.seed,
         )
         self.metricas = ColetorMetricas()
+        self._recalc_ticks = {}
+        self._trails = {}
+        self._heatmap = {}
         self._criar_semaforos(self.config.num_semaforos)
         self._criar_carros(self.config.num_carros, self.config.algoritmo_carros)
 
@@ -190,6 +194,7 @@ class Simulacao:
         for carro in self.carros:
             pos_antes = carro.posicao_atual
             rota_antes = tuple(carro.rota)
+            recalculos_antes = carro.recalculos
 
             moveu = carro.avancar()
             if moveu:
@@ -198,6 +203,9 @@ class Simulacao:
                     self.metricas.registrar(carro.ultimo_resultado, carro.recalculos)
             elif carro.bloqueado:
                 carro.recalcular_rota()
+
+            if carro.recalculos > recalculos_antes:
+                self._recalc_ticks[carro.id] = self.ticks
 
             self._atualizar_telemetria_carro(carro, pos_antes, rota_antes, moveu)
 
@@ -255,6 +263,7 @@ class Simulacao:
                     for k in range(len(rota) - 1):
                         if (rota[k], rota[k+1]) in ((origem, destino), (destino, origem)):
                             carro.recalcular_rota()
+                            self._recalc_ticks[carro.id] = self.ticks
                             break
 
     def remover_acidente(self, origem: No, destino: No) -> None:

@@ -48,6 +48,9 @@ class AgenteCarro:
     passos_aguardando: int = field(default=0, init=False)
     recalculos: int = field(default=0, init=False)
 
+    # Rota anterior ao último recálculo (para visualização)
+    prev_rota: list[No] = field(default_factory=list, init=False)
+
     def __post_init__(self) -> None:
         self.posicao_atual = self.origem
         self.planejar_rota()
@@ -79,6 +82,7 @@ class AgenteCarro:
 
     def recalcular_rota(self) -> Resultado:
         """Força replanejamento a partir da posição atual (ex: após acidente ou bloqueio)."""
+        self.prev_rota = list(self.rota[self._indice_rota:])
         self.recalculos += 1
         return self.planejar_rota()
 
@@ -137,6 +141,10 @@ class AgenteCarro:
     # ------------------------------------------------------------------
     # Propriedades auxiliares
     # ------------------------------------------------------------------
+
+    @property
+    def rota_restante(self) -> list[No]:
+        return self.rota[self._indice_rota:]
 
     @property
     def proximo_no(self) -> Optional[No]:

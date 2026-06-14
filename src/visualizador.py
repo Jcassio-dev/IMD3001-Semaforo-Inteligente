@@ -401,6 +401,23 @@ class Visualizador:
         return area_w, linhas, colunas, cw, ch, to_px
 
     @staticmethod
+    def _draw_dashed_line(surf: pygame.Surface, color: tuple, p1: tuple, p2: tuple, width: int = 2, dash: int = 8, gap: int = 5) -> None:
+        dx, dy = p2[0] - p1[0], p2[1] - p1[1]
+        length = math.hypot(dx, dy)
+        if length < 1:
+            return
+        step = dash + gap
+        n = int(length / step) + 1
+        for k in range(n):
+            t0 = (k * step) / length
+            t1 = min(1.0, (k * step + dash) / length)
+            x0 = int(p1[0] + dx * t0)
+            y0 = int(p1[1] + dy * t0)
+            x1e = int(p1[0] + dx * t1)
+            y1e = int(p1[1] + dy * t1)
+            pygame.draw.line(surf, color, (x0, y0), (x1e, y1e), width)
+
+    @staticmethod
     def _dist_segment(px, py, x1, y1, x2, y2) -> float:
         dx, dy = x2 - x1, y2 - y1
         if dx == dy == 0:
@@ -690,6 +707,35 @@ class Visualizador:
                         dx, dy = to_px(destino)
                         bloqueada = self.sim.grid.aresta_bloqueada(origem, destino)
                         self._draw_road_segment((ox, oy), (dx, dy), blocked=bloqueada)
+
+        _RECALC_SHOW = 30
+        for idx, carro in enumerate(self.sim.carros):
+            if carro.chegou:
+                continue
+            cor = CAR_COLORS[idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor
+            is_hovered = (self._hover_car_idx == idx)
+
+            recalc_tick = self.sim._recalc_ticks.get(carro.id, -999)
+            ticks_since = self.sim.ticks - recalc_tick
+            if carro.prev_rota and 0 <= ticks_since < _RECALC_SHOW:
+                fade = 1.0 - ticks_since / _RECALC_SHOW
+                pr, pg, pb = int(r2 * fade * 0.55), int(g2 * fade * 0.55), int(b2 * fade * 0.55)
+                prev = carro.prev_rota
+                for k in range(len(prev) - 1):
+                    self._draw_dashed_line(self.screen, (pr, pg, pb), to_px(prev[k]), to_px(prev[k + 1]), width=3)
+
+            restante = carro.rota_restante
+            if len(restante) < 2:
+                continue
+            if is_hovered:
+                lw = 5
+                rc = (min(255, r2 + 60), min(255, g2 + 60), min(255, b2 + 60))
+            else:
+                lw = 2
+                rc = (max(20, r2 // 3), max(20, g2 // 3), max(20, b2 // 3))
+            for k in range(len(restante) - 1):
+                pygame.draw.line(self.screen, rc, to_px(restante[k]), to_px(restante[k + 1]), lw)
 
         for (origem, destino), ticks_rest in self.sim.incidentes_ativos.items():
             ox, oy = to_px(origem)
