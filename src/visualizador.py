@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+import math
 import pygame
 
 try:
@@ -165,52 +166,68 @@ def desenhar_frame(
     pygame.display.flip()
 
 
-@dataclass
-class InputBox:
-    key: str
-    label: str
-    x: int
-    y: int
-    w: int
-    value: str
-    min_val: int
-    max_val: int
-    active: bool = False
+class SliderBox:
+    def __init__(self, key: str, label: str, x: int, y: int, w: int, value: int, min_val: int, max_val: int) -> None:
+        self.key = key
+        self.label = label
+        self.x = x
+        self.y = y
+        self.w = w
+        self.value = value
+        self.min_val = min_val
+        self.max_val = max_val
+        self.dragging = False
 
-    def rect(self) -> pygame.Rect:
-        return pygame.Rect(self.x, self.y, self.w, 34)
+    def _thumb_x(self) -> int:
+        span = max(1, self.max_val - self.min_val)
+        return int(self.x + ((self.value - self.min_val) / span) * self.w)
+
+    def _track_rect(self) -> pygame.Rect:
+        return pygame.Rect(self.x, self.y + 18, self.w, 6)
+
+    def _thumb_rect(self) -> pygame.Rect:
+        tx = self._thumb_x()
+        return pygame.Rect(tx - 9, self.y + 12, 18, 18)
+
+    def _set_from_mouse(self, mx: int) -> None:
+        frac = (mx - self.x) / max(1, self.w)
+        frac = max(0.0, min(1.0, frac))
+        self.value = int(round(self.min_val + frac * (self.max_val - self.min_val)))
 
     def handle_event(self, event: pygame.event.Event) -> bool:
-        changed = False
-        if event.type == pygame.MOUSEBUTTONDOWN:
-            self.active = self.rect().collidepoint(event.pos)
-        elif event.type == pygame.KEYDOWN and self.active:
-            if event.key == pygame.K_BACKSPACE:
-                self.value = self.value[:-1]
-                changed = True
-            elif event.key in (pygame.K_RETURN, pygame.K_KP_ENTER):
-                self.active = False
-            elif event.unicode.isdigit() and len(self.value) < 3:
-                self.value += event.unicode
-                changed = True
-        return changed
+        if event.type == pygame.MOUSEBUTTONDOWN and event.button == 1:
+            if self._thumb_rect().collidepoint(event.pos) or self._track_rect().collidepoint(event.pos):
+                self.dragging = True
+                self._set_from_mouse(event.pos[0])
+                return True
+        elif event.type == pygame.MOUSEBUTTONUP and event.button == 1:
+            self.dragging = False
+        elif event.type == pygame.MOUSEMOTION and self.dragging:
+            self._set_from_mouse(event.pos[0])
+            return True
+        return False
 
     def int_value(self) -> int:
-        if not self.value:
-            return self.min_val
-        v = int(self.value)
-        return max(self.min_val, min(self.max_val, v))
+        return max(self.min_val, min(self.max_val, self.value))
 
     def draw(self, surf: pygame.Surface, label_font: pygame.font.Font, value_font: pygame.font.Font) -> None:
-        surf.blit(label_font.render(self.label, True, TEXT_LIGHT), (self.x, self.y - 21))
-        rect = self.rect()
-        fill = (18, 31, 40) if not self.active else (30, 50, 64)
-        pygame.draw.rect(surf, fill, rect, border_radius=7)
-        pygame.draw.rect(surf, PANEL_ACCENT if self.active else (92, 123, 141), rect, 2, border_radius=7)
-        txt = self.value if self.value else "0"
-        surf.blit(value_font.render(txt, True, TEXT_LIGHT), (self.x + 10, self.y + 8))
-        hint = f"[{self.min_val}-{self.max_val}]"
-        surf.blit(value_font.render(hint, True, TEXT_DIM), (self.x + self.w - 84, self.y + 8))
+        label_txt = label_font.render(f"{self.label}:  {self.value}", True, TEXT_LIGHT)
+        surf.blit(label_txt, (self.x, self.y))
+
+        track = self._track_rect()
+        pygame.draw.rect(surf, (30, 50, 65), track, border_radius=3)
+
+        tx = self._thumb_x()
+        filled = pygame.Rect(self.x, self.y + 18, tx - self.x, 6)
+        pygame.draw.rect(surf, PANEL_ACCENT, filled, border_radius=3)
+
+        thumb = self._thumb_rect()
+        color = (255, 255, 255) if not self.dragging else PANEL_ACCENT
+        pygame.draw.rect(surf, color, thumb, border_radius=5)
+
+        surf.blit(value_font.render(str(self.min_val), True, TEXT_DIM), (self.x, self.y + 28))
+        max_txt = value_font.render(str(self.max_val), True, TEXT_DIM)
+        surf.blit(max_txt, (self.x + self.w - max_txt.get_width(), self.y + 28))
 
 
 @dataclass
@@ -306,26 +323,27 @@ class Visualizador:
         x = WINDOW_W - PANEL_W + 22
         w = PANEL_W - 44
         self.inputs = {
-            "linhas": InputBox("linhas", "Linhas do grid", x, 110, w, "10", 5, 35),
-            "colunas": InputBox("colunas", "Colunas do grid", x, 172, w, "10", 5, 35),
-            "carros": InputBox("carros", "Quantidade de carros", x, 234, w, "8", 1, 90),
-            "semaforos": InputBox("semaforos", "Quantidade de semaforos", x, 296, w, "6", 0, 120),
-            "incidentes": InputBox("incidentes", "Incidentes ativos", x, 358, w, "3", 0, 40),
-            "duracao": InputBox("duracao", "Duracao incidente (ticks)", x, 420, w, "20", 3, 120),
-            "velocidade": InputBox("velocidade", "Velocidade (ticks/s)", x, 482, w, "8", 1, 30),
+            "linhas":     SliderBox("linhas",     "Linhas do grid",          x, 90,  w, 10, 5,  35),
+            "colunas":    SliderBox("colunas",    "Colunas do grid",         x, 148, w, 10, 5,  35),
+            "carros":     SliderBox("carros",     "Quantidade de carros",    x, 206, w, 8,  1,  90),
+            "semaforos":  SliderBox("semaforos",  "Quantidade de semaforos", x, 264, w, 6,  0,  120),
+            "incidentes": SliderBox("incidentes", "Incidentes ativos",       x, 322, w, 3,  0,  40),
+            "duracao":    SliderBox("duracao",    "Duracao incidente",       x, 380, w, 20, 3,  120),
+            "velocidade": SliderBox("velocidade", "Velocidade (ticks/s)",    x, 438, w, 8,  1,  30),
         }
 
-        self.alg_select = SelectBox("Algoritmo dos carros", x, 558, w, self.algoritmos, selected_idx=3)
+        self.alg_select = SelectBox("Algoritmo dos carros", x, 510, w, self.algoritmos, selected_idx=3)
 
-        self.btn_apply = Button("Aplicar configuracao", x, 710, w, 44)
-        self.btn_play = Button("Pausar", x, 762, w, 44)
-        self.btn_perf = Button("Desempenho", x, 814, w, 44)
+        self.btn_apply = Button("Aplicar configuracao", x, 580, w, 44)
+        self.btn_play  = Button("Pausar",               x, 632, w, 44)
+        self.btn_perf  = Button("Desempenho",           x, 684, w, 44)
         self.btn_close_modal = Button("Fechar", 0, 0, 120, 40)
 
         self.rodando = True
         self.paused = False
         self._tick_acc = 0.0
         self.modal_desempenho_aberto = False
+        self._hover_car_idx: int | None = None
 
         self._reflow_layout()
         self.sim = self._nova_simulacao()
@@ -344,14 +362,15 @@ class Visualizador:
         x = panel_x + 22
         w = panel_w - 44
 
+        slider_h = 58
         y_positions = {
-            "linhas": 110,
-            "colunas": 172,
-            "carros": 234,
-            "semaforos": 296,
-            "incidentes": 358,
-            "duracao": 420,
-            "velocidade": 482,
+            "linhas":     90,
+            "colunas":    90 + slider_h,
+            "carros":     90 + slider_h * 2,
+            "semaforos":  90 + slider_h * 3,
+            "incidentes": 90 + slider_h * 4,
+            "duracao":    90 + slider_h * 5,
+            "velocidade": 90 + slider_h * 6,
         }
 
         for key, box in self.inputs.items():
@@ -359,22 +378,86 @@ class Visualizador:
             box.y = y_positions[key]
             box.w = w
 
+        alg_y = 90 + slider_h * 7 + 10
         self.alg_select.x = x
-        self.alg_select.y = 558
+        self.alg_select.y = alg_y
         self.alg_select.w = w
 
-        buttons_y = min(height - 170, 710)
-        self.btn_apply.x = x
-        self.btn_apply.y = buttons_y
-        self.btn_apply.w = w
+        btn_y = alg_y + 70
+        self.btn_apply.x = x ; self.btn_apply.y = btn_y       ; self.btn_apply.w = w
+        self.btn_play.x  = x ; self.btn_play.y  = btn_y + 52  ; self.btn_play.w  = w
+        self.btn_perf.x  = x ; self.btn_perf.y  = btn_y + 104 ; self.btn_perf.w  = w
 
-        self.btn_play.x = x
-        self.btn_play.y = buttons_y + 52
-        self.btn_play.w = w
+    def _grid_layout(self):
+        width, height = self._window_size()
+        area_w = width - self._panel_width()
+        linhas = self.sim.grid.linhas
+        colunas = self.sim.grid.colunas
+        cw = (area_w - 2 * GRID_MARGIN) / max(1, colunas - 1)
+        ch = (height - 2 * GRID_MARGIN) / max(1, linhas - 1)
+        def to_px(no):
+            i, j = no
+            return (int(GRID_MARGIN + j * cw), int(GRID_MARGIN + i * ch))
+        return area_w, linhas, colunas, cw, ch, to_px
 
-        self.btn_perf.x = x
-        self.btn_perf.y = buttons_y + 104
-        self.btn_perf.w = w
+    @staticmethod
+    def _dist_segment(px, py, x1, y1, x2, y2) -> float:
+        dx, dy = x2 - x1, y2 - y1
+        if dx == dy == 0:
+            return math.hypot(px - x1, py - y1)
+        t = max(0.0, min(1.0, ((px - x1)*dx + (py - y1)*dy) / (dx*dx + dy*dy)))
+        return math.hypot(px - (x1 + t*dx), py - (y1 + t*dy))
+
+    def _grid_hit(self, pos):
+        area_w, linhas, colunas, cw, ch, to_px = self._grid_layout()
+        mx, my = pos
+        if mx >= area_w:
+            return None
+
+        ni = max(0, min(linhas - 1, round((my - GRID_MARGIN) / ch)))
+        nj = max(0, min(colunas - 1, round((mx - GRID_MARGIN) / cw)))
+        nx, ny = to_px((ni, nj))
+
+        if math.hypot(mx - nx, my - ny) < 22:
+            return ('node', (ni, nj))
+
+        best, best_d = None, 18.0
+        for i in range(max(0, ni - 1), min(linhas, ni + 2)):
+            for j in range(max(0, nj - 1), min(colunas, nj + 2)):
+                for di, dj in ((-1,0),(1,0),(0,-1),(0,1)):
+                    i2, j2 = i + di, j + dj
+                    if 0 <= i2 < linhas and 0 <= j2 < colunas:
+                        x1, y1 = to_px((i, j))
+                        x2, y2 = to_px((i2, j2))
+                        d = self._dist_segment(mx, my, x1, y1, x2, y2)
+                        if d < best_d:
+                            best_d = d
+                            a, b = (i, j), (i2, j2)
+                            best = ('edge', min(a, b), max(a, b))
+        return best
+
+    def _on_grid_click(self, pos, button: int) -> None:
+        hit = self._grid_hit(pos)
+        if hit is None:
+            return
+        if hit[0] == 'node':
+            no = hit[1]
+            if button == 1:
+                if any(s.no == no for s in self.sim.semaforos):
+                    self.sim.remover_semaforo(no)
+                else:
+                    self.sim.criar_semaforo(no)
+            elif button == 3:
+                self.sim.remover_semaforo(no)
+        elif hit[0] == 'edge':
+            origem, destino = hit[1], hit[2]
+            if button == 1:
+                if self.sim.grid.aresta_bloqueada(origem, destino):
+                    self.sim.remover_acidente(origem, destino)
+                else:
+                    self.sim.criar_acidente(origem, destino)
+            elif button == 3:
+                self.sim.remover_acidente(origem, destino)
 
     def _nova_simulacao(self) -> Simulacao:
         linhas = self.inputs["linhas"].int_value()
@@ -384,8 +467,8 @@ class Visualizador:
         semaforos = min(self.inputs["semaforos"].int_value(), max_nos)
         carros = min(self.inputs["carros"].int_value(), max(1, max_nos // 2))
 
-        self.inputs["semaforos"].value = str(semaforos)
-        self.inputs["carros"].value = str(carros)
+        self.inputs["semaforos"].value = semaforos
+        self.inputs["carros"].value = carros
 
         cfg = ConfigVisual(
             linhas=linhas,
@@ -414,10 +497,7 @@ class Visualizador:
                 self.rodando = False
                 continue
 
-            if event.type == pygame.VIDEORESIZE:
-                new_w = max(MIN_WINDOW_W, event.w)
-                new_h = max(MIN_WINDOW_H, event.h)
-                self.screen = pygame.display.set_mode((new_w, new_h), pygame.RESIZABLE)
+            if event.type == pygame.WINDOWRESIZED:
                 self._reflow_layout()
                 continue
 
@@ -435,6 +515,9 @@ class Visualizador:
 
             self.alg_select.handle_event(event)
 
+            if event.type == pygame.MOUSEMOTION:
+                self._update_hover(event.pos)
+
             if event.type == pygame.MOUSEBUTTONDOWN:
                 pos = event.pos
                 if self.btn_apply.hit(pos):
@@ -444,6 +527,8 @@ class Visualizador:
                     self.btn_play.text = "Retomar" if self.paused else "Pausar"
                 elif self.btn_perf.hit(pos):
                     self.modal_desempenho_aberto = True
+                else:
+                    self._on_grid_click(pos, event.button)
 
     def _update(self, dt: float) -> None:
         if self.paused:
@@ -572,22 +657,29 @@ class Visualizador:
         rect = rotated.get_rect(center=(x, y))
         self.screen.blit(rotated, rect)
 
+    def _update_hover(self, pos: tuple[int, int]) -> None:
+        area_w, linhas, colunas, cw, ch, to_px = self._grid_layout()
+        self._hover_car_idx = None
+        for idx, carro in enumerate(self.sim.carros):
+            cx, cy = to_px(carro.posicao_atual)
+            if math.hypot(pos[0] - cx, pos[1] - cy) < 16:
+                self._hover_car_idx = idx
+                break
+
     def _draw_grid_area(self) -> None:
-        width, height = self._window_size()
-        area_w = width - self._panel_width()
-        area_h = height
+        area_w, linhas, colunas, cell_w, cell_h, to_px = self._grid_layout()
 
-        linhas = self.sim.grid.linhas
-        colunas = self.sim.grid.colunas
-
-        cell_w = (area_w - 2 * GRID_MARGIN) / max(1, colunas - 1)
-        cell_h = (area_h - 2 * GRID_MARGIN) / max(1, linhas - 1)
-
-        def to_px(no: tuple[int, int]) -> tuple[int, int]:
-            i, j = no
-            x = int(GRID_MARGIN + j * cell_w)
-            y = int(GRID_MARGIN + i * cell_h)
-            return x, y
+        # Heatmap overlay
+        max_heat = max(self.sim._heatmap.values(), default=1)
+        for no, count in self.sim._heatmap.items():
+            x, y = to_px(no)
+            intensity = count / max_heat
+            if intensity > 0.05:
+                r = int(220 * intensity)
+                g = int(60 * (1 - intensity))
+                surf = pygame.Surface((36, 36), pygame.SRCALPHA)
+                pygame.draw.circle(surf, (r, g, 20, int(140 * intensity)), (18, 18), 18)
+                self.screen.blit(surf, (x - 18, y - 18))
 
         for i in range(linhas):
             for j in range(colunas):
@@ -604,7 +696,8 @@ class Visualizador:
             dx, dy = to_px(destino)
             cx = (ox + dx) // 2
             cy = (oy + dy) // 2
-            txt = self.tiny.render(str(ticks_rest), True, (255, 255, 255))
+            ticks_display = ticks_rest if ticks_rest < 9999 else "!"
+            txt = self.tiny.render(str(ticks_display), True, (255, 255, 255))
             pygame.draw.circle(self.screen, (130, 18, 18), (cx, cy), 10)
             self.screen.blit(txt, (cx - txt.get_width() // 2, cy - txt.get_height() // 2))
 
@@ -617,18 +710,57 @@ class Visualizador:
             x, y = to_px(semaforo.no)
             self._draw_traffic_light_sprite(x + 15, y - 16, semaforo.estado)
 
+        # Rastros e destinos
+        for idx, carro in enumerate(self.sim.carros):
+            cor = CAR_COLORS[idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor
+            trail = self.sim._trails.get(carro.id, [])
+            for t, no in enumerate(trail[:-1]):
+                tx, ty = to_px(no)
+                alpha = int(180 * (t + 1) / len(trail))
+                radius = max(3, 6 - (len(trail) - t))
+                surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+                pygame.draw.circle(surf, (r2, g2, b2, alpha), (radius, radius), radius)
+                self.screen.blit(surf, (tx - radius, ty - radius))
+
+            # Marcador de destino
+            dx, dy = to_px(carro.destino)
+            pygame.draw.circle(self.screen, (r2, g2, b2), (dx, dy), 7, 2)
+            pygame.draw.line(self.screen, (r2, g2, b2), (dx, dy - 14), (dx, dy - 2), 2)
+            pygame.draw.polygon(self.screen, (r2, g2, b2), [(dx, dy - 14), (dx + 8, dy - 10), (dx, dy - 6)])
+
         for idx, carro in enumerate(self.sim.carros):
             x, y = to_px(carro.posicao_atual)
             cor = CAR_COLORS[idx % len(CAR_COLORS)]
             proximo = carro.proximo_no
-            if proximo is None:
-                heading = (0, 1)
-            else:
-                heading = (
-                    proximo[0] - carro.posicao_atual[0],
-                    proximo[1] - carro.posicao_atual[1],
-                )
+            heading = (0, 1) if proximo is None else (
+                proximo[0] - carro.posicao_atual[0],
+                proximo[1] - carro.posicao_atual[1],
+            )
             self._draw_car_sprite(x, y, cor, heading, str(carro.id))
+
+        # Tooltip hover
+        if self._hover_car_idx is not None and self._hover_car_idx < len(self.sim.carros):
+            carro = self.sim.carros[self._hover_car_idx]
+            cor = CAR_COLORS[self._hover_car_idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor
+            cx, cy = to_px(carro.posicao_atual)
+            lines = [
+                f"Carro {carro.id} ({carro.algoritmo.value})",
+                f"Custo: {carro.distancia_percorrida:.1f}",
+                f"Recalculos: {carro.recalculos}",
+                f"Estado: {carro.estado.value}",
+            ]
+            pad, lh = 8, 17
+            tw = max(self.tiny.size(l)[0] for l in lines) + pad * 2
+            th = len(lines) * lh + pad * 2
+            tx = min(cx + 16, area_w - tw - 4)
+            ty = max(4, cy - th // 2)
+            pygame.draw.rect(self.screen, (14, 24, 34), (tx, ty, tw, th), border_radius=6)
+            pygame.draw.rect(self.screen, (r2, g2, b2), (tx, ty, tw, th), 2, border_radius=6)
+            for k, line in enumerate(lines):
+                color = (r2, g2, b2) if k == 0 else TEXT_DIM
+                self.screen.blit(self.tiny.render(line, True, color), (tx + pad, ty + pad + k * lh))
 
     def _draw_panel(self) -> None:
         width, height = self._window_size()
