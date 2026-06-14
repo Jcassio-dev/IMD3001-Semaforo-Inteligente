@@ -20,6 +20,8 @@ except ImportError:
     from acidentes import SistemaAcidentes
     from metricas import ColetorMetricas
 
+_TRAIL_MAX = 10
+
 
 No = tuple[int, int]
 Aresta = tuple[No, No]
@@ -65,6 +67,8 @@ class Simulacao:
         self.movimentos_no_tick = 0
 
         self._telemetria: dict[int, TelemetriaCarro] = {}
+        self._trails: dict[int, list[No]] = {}
+        self._heatmap: dict[No, int] = {}
 
         self._congestionamento = SistemaCongestionamento(self.grid)
         self._acidentes = SistemaAcidentes(
@@ -197,6 +201,15 @@ class Simulacao:
 
             self._atualizar_telemetria_carro(carro, pos_antes, rota_antes, moveu)
 
+            trail = self._trails.setdefault(carro.id, [])
+            if not trail or trail[-1] != carro.posicao_atual:
+                trail.append(carro.posicao_atual)
+                if len(trail) > _TRAIL_MAX:
+                    trail.pop(0)
+
+            no = carro.posicao_atual
+            self._heatmap[no] = self._heatmap.get(no, 0) + 1
+
         self.movimentos_no_tick = movimentos
 
     def _atualizar_telemetria_carro(
@@ -231,6 +244,42 @@ class Simulacao:
     # ------------------------------------------------------------------
     # Metricas
     # ------------------------------------------------------------------
+
+    def criar_acidente(self, origem: No, destino: No) -> None:
+        if not self.grid.aresta_bloqueada(origem, destino):
+            self.grid.bloquear_aresta(origem, destino)
+            self._acidentes._acidentes[(origem, destino)] = 9999
+            for carro in self.carros:
+                if not carro.chegou:
+                    rota = carro.rota
+                    for k in range(len(rota) - 1):
+                        if (rota[k], rota[k+1]) in ((origem, destino), (destino, origem)):
+                            carro.recalcular_rota()
+                            break
+
+    def remover_acidente(self, origem: No, destino: No) -> None:
+        self.grid.desbloquear_aresta(origem, destino)
+        self._acidentes._acidentes.pop((origem, destino), None)
+        self._acidentes._acidentes.pop((destino, origem), None)
+        self.incidentes_ativos = self._acidentes.acidentes_ativos
+
+    def criar_semaforo(self, no: No) -> None:
+        if any(s.no == no for s in self.semaforos):
+            return
+        s = AgenteSemaforo(
+            no=no,
+            direcao_atual=self._rng.choice([Direcao.HORIZONTAL, Direcao.VERTICAL]),
+            min_verde=2, max_verde=7, duracao_amarelo=2,
+        )
+        s.registrar(self.grid)
+        self.semaforos.append(s)
+
+    def remover_semaforo(self, no: No) -> None:
+        for s in list(self.semaforos):
+            if s.no == no:
+                s.remover(self.grid)
+                self.semaforos.remove(s)
+                break
 
     @property
     def carros_chegaram(self) -> int:
