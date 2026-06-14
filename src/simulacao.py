@@ -8,11 +8,17 @@ try:
     from .agente_semaforo import AgenteSemaforo
     from .grid import Grid
     from .modelos import Algoritmo, Direcao
+    from .congestionamento import SistemaCongestionamento
+    from .acidentes import SistemaAcidentes
+    from .metricas import ColetorMetricas
 except ImportError:
     from agente_carro import AgenteCarro
     from agente_semaforo import AgenteSemaforo
     from grid import Grid
     from modelos import Algoritmo, Direcao
+    from congestionamento import SistemaCongestionamento
+    from acidentes import SistemaAcidentes
+    from metricas import ColetorMetricas
 
 
 No = tuple[int, int]
@@ -59,6 +65,15 @@ class Simulacao:
         self.movimentos_no_tick = 0
 
         self._telemetria: dict[int, TelemetriaCarro] = {}
+
+        self._congestionamento = SistemaCongestionamento(self.grid)
+        self._acidentes = SistemaAcidentes(
+            self.grid,
+            prob_acidente=0.05,
+            duracao_acidente=config.duracao_incidente,
+            seed=config.seed,
+        )
+        self.metricas = ColetorMetricas()
 
         self._criar_semaforos(config.num_semaforos)
         self._criar_carros(config.num_carros, config.algoritmo_carros)
@@ -125,6 +140,33 @@ class Simulacao:
     # Tick
     # ------------------------------------------------------------------
 
+    def iniciar(self) -> None:
+        pass
+
+    def tick(self) -> None:
+        self.step()
+
+    def resetar(self) -> None:
+        for semaforo in self.semaforos:
+            semaforo.remover(self.grid)
+        self.grid = Grid(self.config.linhas, self.config.colunas)
+        self.carros = []
+        self.semaforos = []
+        self.incidentes_ativos = {}
+        self.ticks = 0
+        self.movimentos_no_tick = 0
+        self._telemetria = {}
+        self._congestionamento = SistemaCongestionamento(self.grid)
+        self._acidentes = SistemaAcidentes(
+            self.grid,
+            prob_acidente=0.05,
+            duracao_acidente=self.config.duracao_incidente,
+            seed=self.config.seed,
+        )
+        self.metricas = ColetorMetricas()
+        self._criar_semaforos(self.config.num_semaforos)
+        self._criar_carros(self.config.num_carros, self.config.algoritmo_carros)
+
     def step(self) -> None:
         self.ticks += 1
 
@@ -132,11 +174,14 @@ class Simulacao:
         for semaforo in self.semaforos:
             semaforo.tick()
 
-        # 2) Atualiza incidentes ativos e cria novos se necessario
-        self._atualizar_incidentes()
-        self._garantir_incidentes_alvo()
+        # 2) Acidentes via SistemaAcidentes
+        self._acidentes.tick(self.carros)
+        self.incidentes_ativos = self._acidentes.acidentes_ativos
 
-        # 3) Move carros
+        # 3) Congestionamento via SistemaCongestionamento
+        self._congestionamento.atualizar(self.carros)
+
+        # 4) Move carros
         movimentos = 0
         for carro in self.carros:
             pos_antes = carro.posicao_atual
@@ -145,58 +190,14 @@ class Simulacao:
             moveu = carro.avancar()
             if moveu:
                 movimentos += 1
+                if carro.ultimo_resultado:
+                    self.metricas.registrar(carro.ultimo_resultado, carro.recalculos)
             elif carro.bloqueado:
-                # tenta recuperar um carro sem rota
                 carro.recalcular_rota()
 
             self._atualizar_telemetria_carro(carro, pos_antes, rota_antes, moveu)
 
         self.movimentos_no_tick = movimentos
-
-    def _atualizar_incidentes(self) -> None:
-        expirar: list[Aresta] = []
-        for aresta, restante in list(self.incidentes_ativos.items()):
-            restante -= 1
-            if restante <= 0:
-                expirar.append(aresta)
-            else:
-                self.incidentes_ativos[aresta] = restante
-
-        for origem, destino in expirar:
-            self.grid.desbloquear_aresta(origem, destino)
-            self.incidentes_ativos.pop((origem, destino), None)
-
-    def _garantir_incidentes_alvo(self) -> None:
-        alvo = max(0, self.config.num_incidentes)
-        while len(self.incidentes_ativos) < alvo:
-            aresta = self._sortear_aresta_livre()
-            if aresta is None:
-                break
-            origem, destino = aresta
-            self.grid.bloquear_aresta(origem, destino)
-            self.incidentes_ativos[(origem, destino)] = self.config.duracao_incidente
-
-            # Ao surgir incidente novo, forca recalculo para reduzir travamentos
-            for carro in self.carros:
-                if not carro.chegou:
-                    rota_antes = tuple(carro.rota)
-                    carro.recalcular_rota()
-                    self._contar_mudanca_trajetoria(carro, rota_antes)
-
-    def _sortear_aresta_livre(self) -> Aresta | None:
-        candidatos: list[Aresta] = []
-        for i in range(self.grid.linhas):
-            for j in range(self.grid.colunas):
-                origem = (i, j)
-                for destino in self.grid.vizinhos(origem):
-                    # evita duplicar aresta inversa
-                    if origem < destino and not self.grid.aresta_bloqueada(origem, destino):
-                        candidatos.append((origem, destino))
-
-        if not candidatos:
-            return None
-        self._rng.shuffle(candidatos)
-        return candidatos[0]
 
     def _atualizar_telemetria_carro(
         self,
