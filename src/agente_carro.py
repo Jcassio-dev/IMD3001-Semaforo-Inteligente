@@ -90,12 +90,13 @@ class AgenteCarro:
     # Movimentação
     # ------------------------------------------------------------------
 
-    def avancar(self) -> bool:
+    def avancar(self, ocupados: Optional[set] = None) -> bool:
         """
         Tenta mover o agente um passo na rota planejada.
 
         Retorna True se o agente avançou de nó, False caso contrário
-        (semáforo vermelho, sem rota, ou já chegou).
+        (semáforo vermelho, tráfego, sem rota, ou já chegou).
+        `ocupados` é o conjunto de nós atualmente ocupados por outros carros.
         """
         if self.estado in (EstadoCarro.CHEGOU, EstadoCarro.SEM_ROTA):
             return False
@@ -103,7 +104,6 @@ class AgenteCarro:
         # Verifica semáforo no nó atual
         if self._semaforo_vermelho():
             if self.estado != EstadoCarro.AGUARDANDO:
-                # Primeira vez que para neste semáforo — notifica chegada
                 self._notificar_semaforo_chegou()
             self.estado = EstadoCarro.AGUARDANDO
             self.passos_aguardando += 1
@@ -119,6 +119,10 @@ class AgenteCarro:
             resultado = self.recalcular_rota()
             if not resultado.encontrou:
                 self.estado = EstadoCarro.SEM_ROTA
+            return False
+
+        # Colisão: próximo nó ocupado por outro carro
+        if ocupados and proximo in ocupados:
             return False
 
         # Se estava aguardando em semáforo, notifica que passou

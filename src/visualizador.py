@@ -756,20 +756,37 @@ class Visualizador:
             x, y = to_px(semaforo.no)
             self._draw_traffic_light_sprite(x + 15, y - 16, semaforo.estado)
 
-        # Rastros e destinos
+        # Polilinha completa do caminho percorrido (sempre visivel)
+        for idx, carro in enumerate(self.sim.carros):
+            cor = CAR_COLORS[idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor
+            full = self.sim._full_trails.get(carro.id, [])
+            if len(full) >= 2:
+                pts = [to_px(n) for n in full]
+                is_hovered = (self._hover_car_idx == idx)
+                if is_hovered:
+                    pygame.draw.lines(self.screen, (min(255, r2 + 50), min(255, g2 + 50), min(255, b2 + 50)), False, pts, 4)
+                else:
+                    pygame.draw.lines(self.screen, (max(15, r2 // 4), max(15, g2 // 4), max(15, b2 // 4)), False, pts, 2)
+
+        # Circulo de presenca recente (glow perto do carro)
         for idx, carro in enumerate(self.sim.carros):
             cor = CAR_COLORS[idx % len(CAR_COLORS)]
             r2, g2, b2 = cor
             trail = self.sim._trails.get(carro.id, [])
+            n = len(trail)
             for t, no in enumerate(trail[:-1]):
                 tx, ty = to_px(no)
-                alpha = int(180 * (t + 1) / len(trail))
-                radius = max(3, 6 - (len(trail) - t))
-                surf = pygame.Surface((radius*2, radius*2), pygame.SRCALPHA)
+                alpha = int(140 * (t + 1) / n)
+                radius = max(2, 5 - (n - t - 1))
+                surf = pygame.Surface((radius * 2, radius * 2), pygame.SRCALPHA)
                 pygame.draw.circle(surf, (r2, g2, b2, alpha), (radius, radius), radius)
                 self.screen.blit(surf, (tx - radius, ty - radius))
 
-            # Marcador de destino
+        # Marcadores de destino
+        for idx, carro in enumerate(self.sim.carros):
+            cor = CAR_COLORS[idx % len(CAR_COLORS)]
+            r2, g2, b2 = cor
             dx, dy = to_px(carro.destino)
             pygame.draw.circle(self.screen, (r2, g2, b2), (dx, dy), 7, 2)
             pygame.draw.line(self.screen, (r2, g2, b2), (dx, dy - 14), (dx, dy - 2), 2)
@@ -791,11 +808,14 @@ class Visualizador:
             cor = CAR_COLORS[self._hover_car_idx % len(CAR_COLORS)]
             r2, g2, b2 = cor
             cx, cy = to_px(carro.posicao_atual)
+            nos_percorridos = len(self.sim._full_trails.get(carro.id, []))
+            estado_txt = carro.estado.value
             lines = [
                 f"Carro {carro.id} ({carro.algoritmo.value})",
-                f"Custo: {carro.distancia_percorrida:.1f}",
+                f"Estado: {estado_txt}",
+                f"Custo acumulado: {carro.distancia_percorrida:.1f}",
+                f"Nos percorridos: {nos_percorridos}",
                 f"Recalculos: {carro.recalculos}",
-                f"Estado: {carro.estado.value}",
             ]
             pad, lh = 8, 17
             tw = max(self.tiny.size(l)[0] for l in lines) + pad * 2

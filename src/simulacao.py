@@ -68,6 +68,7 @@ class Simulacao:
 
         self._telemetria: dict[int, TelemetriaCarro] = {}
         self._trails: dict[int, list[No]] = {}
+        self._full_trails: dict[int, list[No]] = {}
         self._heatmap: dict[No, int] = {}
         self._recalc_ticks: dict[int, int] = {}
 
@@ -117,6 +118,7 @@ class Simulacao:
                 algoritmo=algoritmo,
             )
             self.carros.append(carro)
+            self._full_trails[carro.id] = [origem]
             self._telemetria[carro.id] = TelemetriaCarro(
                 origem=origem,
                 destino=destino,
@@ -171,6 +173,7 @@ class Simulacao:
         self.metricas = ColetorMetricas()
         self._recalc_ticks = {}
         self._trails = {}
+        self._full_trails = {}
         self._heatmap = {}
         self._criar_semaforos(self.config.num_semaforos)
         self._criar_carros(self.config.num_carros, self.config.algoritmo_carros)
@@ -189,14 +192,23 @@ class Simulacao:
         # 3) Congestionamento via SistemaCongestionamento
         self._congestionamento.atualizar(self.carros)
 
-        # 4) Move carros
+        # 4) Move carros (com colisão simples: carro espera se próximo nó ocupado)
         movimentos = 0
+        ocupados: set[No] = {c.posicao_atual for c in self.carros if not c.chegou}
+
         for carro in self.carros:
             pos_antes = carro.posicao_atual
             rota_antes = tuple(carro.rota)
             recalculos_antes = carro.recalculos
 
-            moveu = carro.avancar()
+            # Remove posição atual do conjunto antes de tentar mover
+            ocupados.discard(pos_antes)
+
+            moveu = carro.avancar(ocupados=ocupados)
+
+            # Atualiza conjunto com posição final do carro
+            ocupados.add(carro.posicao_atual)
+
             if moveu:
                 movimentos += 1
                 if carro.ultimo_resultado:
@@ -214,6 +226,10 @@ class Simulacao:
                 trail.append(carro.posicao_atual)
                 if len(trail) > _TRAIL_MAX:
                     trail.pop(0)
+
+            full = self._full_trails.setdefault(carro.id, [])
+            if not full or full[-1] != carro.posicao_atual:
+                full.append(carro.posicao_atual)
 
             no = carro.posicao_atual
             self._heatmap[no] = self._heatmap.get(no, 0) + 1
