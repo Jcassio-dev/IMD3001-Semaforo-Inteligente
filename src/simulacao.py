@@ -194,9 +194,13 @@ class Simulacao:
         # 3) Congestionamento via SistemaCongestionamento
         self._congestionamento.atualizar(self.carros)
 
-        # 4) Move carros (com colisão simples: carro espera se próximo nó ocupado)
+        # 4) Move carros
+        # Snapshot de posições no início do tick (para detecção de sentido oposto)
         movimentos = 0
-        ocupados: set[No] = {c.posicao_atual for c in self.carros if not c.chegou}
+        pos_to_car: dict[No, AgenteCarro] = {
+            c.posicao_atual: c for c in self.carros if not c.chegou
+        }
+        ocupados: set[No] = set(pos_to_car.keys())
 
         for carro in self.carros:
             pos_antes = carro.posicao_atual
@@ -204,12 +208,25 @@ class Simulacao:
             recalculos_antes = carro.recalculos
             proximo_antes = carro.proximo_no
 
-            # Remove posição atual do conjunto antes de tentar mover
             ocupados.discard(pos_antes)
+
+            # Sentidos opostos na mesma aresta: libera passagem (duas faixas)
+            # Carro A(X→Y) e carro B(Y→X) em EM_ROTA: não se bloqueiam
+            no_liberado: No | None = None
+            if proximo_antes is not None and proximo_antes in ocupados:
+                outro = pos_to_car.get(proximo_antes)
+                if (outro is not None
+                        and outro.proximo_no == pos_antes
+                        and outro.estado == EstadoCarro.EM_ROTA):
+                    ocupados.discard(proximo_antes)
+                    no_liberado = proximo_antes
 
             moveu = carro.avancar(ocupados=ocupados)
 
-            # Atualiza conjunto com posição final do carro
+            # Restaura nó liberado caso o carro não tenha se movido para ele
+            if no_liberado is not None and carro.posicao_atual != no_liberado:
+                ocupados.add(no_liberado)
+
             ocupados.add(carro.posicao_atual)
 
             if moveu:
