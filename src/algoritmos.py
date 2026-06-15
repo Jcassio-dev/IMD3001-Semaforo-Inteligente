@@ -20,11 +20,14 @@ def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
             custo_total=0.0,
         )
 
+    caminho_final: list[No] = []
+    nos_expandidos = 0
+    encontrou = False
+
     with Timer() as t:
         fila: deque[tuple[No, list[No]]] = deque()
         fila.append((inicio, [inicio]))
         visitados: set[No] = {inicio}
-        nos_expandidos = 0
 
         while fila:
             atual, caminho = fila.popleft()
@@ -33,19 +36,24 @@ def bfs(grid: Grid, inicio: No, destino: No) -> Resultado:
             for vizinho in grid.vizinhos(atual):
                 if vizinho == destino:
                     caminho_final = caminho + [vizinho]
-                    custo = _calcular_custo(grid, caminho_final)
-                    return Resultado(
-                        algoritmo=Algoritmo.BFS,
-                        caminho=caminho_final,
-                        encontrou=True,
-                        nos_expandidos=nos_expandidos,
-                        custo_total=custo,
-                        tempo_ms=t.tempo_ms,
-                    )
+                    encontrou = True
+                    break
                 if vizinho not in visitados:
                     visitados.add(vizinho)
                     fila.append((vizinho, caminho + [vizinho]))
 
+            if encontrou:
+                break
+
+    if encontrou:
+        return Resultado(
+            algoritmo=Algoritmo.BFS,
+            caminho=caminho_final,
+            encontrou=True,
+            nos_expandidos=nos_expandidos,
+            custo_total=_calcular_custo(grid, caminho_final),
+            tempo_ms=t.tempo_ms,
+        )
     return Resultado(
         algoritmo=Algoritmo.BFS,
         caminho=[],
@@ -65,31 +73,37 @@ def dfs(grid: Grid, inicio: No, destino: No) -> Resultado:
             custo_total=0.0,
         )
 
+    caminho_final: list[No] = []
+    nos_expandidos = 0
+    encontrou = False
+
     with Timer() as t:
         pilha: list[tuple[No, list[No]]] = [(inicio, [inicio])]
         visitados: set[No] = {inicio}
-        nos_expandidos = 0
 
         while pilha:
             atual, caminho = pilha.pop()
             nos_expandidos += 1
 
             if atual == destino:
-                custo = _calcular_custo(grid, caminho)
-                return Resultado(
-                    algoritmo=Algoritmo.DFS,
-                    caminho=caminho,
-                    encontrou=True,
-                    nos_expandidos=nos_expandidos,
-                    custo_total=custo,
-                    tempo_ms=t.tempo_ms,
-                )
+                caminho_final = caminho
+                encontrou = True
+                break
 
             for vizinho in grid.vizinhos(atual):
                 if vizinho not in visitados:
                     visitados.add(vizinho)
                     pilha.append((vizinho, caminho + [vizinho]))
 
+    if encontrou:
+        return Resultado(
+            algoritmo=Algoritmo.DFS,
+            caminho=caminho_final,
+            encontrou=True,
+            nos_expandidos=nos_expandidos,
+            custo_total=_calcular_custo(grid, caminho_final),
+            tempo_ms=t.tempo_ms,
+        )
     return Resultado(
         algoritmo=Algoritmo.DFS,
         caminho=[],
@@ -109,27 +123,24 @@ def greedy_best_first(grid: Grid, inicio: No, destino: No) -> Resultado:
             custo_total=0.0,
         )
 
+    caminho_final: list[No] = []
+    nos_expandidos = 0
+    encontrou = False
+
     with Timer() as t:
         contador = 0
         fila: list[tuple[float, int, No, list[No]]] = []
         heapq.heappush(fila, (heuristica_manhattan(inicio, destino), contador, inicio, [inicio]))
         visitados: set[No] = {inicio}
-        nos_expandidos = 0
 
         while fila:
             _h, _c, atual, caminho = heapq.heappop(fila)
             nos_expandidos += 1
 
             if atual == destino:
-                custo = _calcular_custo(grid, caminho)
-                return Resultado(
-                    algoritmo=Algoritmo.GREEDY,
-                    caminho=caminho,
-                    encontrou=True,
-                    nos_expandidos=nos_expandidos,
-                    custo_total=custo,
-                    tempo_ms=t.tempo_ms,
-                )
+                caminho_final = caminho
+                encontrou = True
+                break
 
             for vizinho in grid.vizinhos(atual):
                 if vizinho not in visitados:
@@ -138,6 +149,15 @@ def greedy_best_first(grid: Grid, inicio: No, destino: No) -> Resultado:
                     h = heuristica_manhattan(vizinho, destino)
                     heapq.heappush(fila, (h, contador, vizinho, caminho + [vizinho]))
 
+    if encontrou:
+        return Resultado(
+            algoritmo=Algoritmo.GREEDY,
+            caminho=caminho_final,
+            encontrou=True,
+            nos_expandidos=nos_expandidos,
+            custo_total=_calcular_custo(grid, caminho_final),
+            tempo_ms=t.tempo_ms,
+        )
     return Resultado(
         algoritmo=Algoritmo.GREEDY,
         caminho=[],
@@ -157,6 +177,11 @@ def a_estrela(grid: Grid, inicio: No, destino: No) -> Resultado:
             custo_total=0.0,
         )
 
+    caminho_final: list[No] = []
+    nos_expandidos = 0
+    custo_final = 0.0
+    encontrou = False
+
     with Timer() as t:
         contador = 0
         h_inicio = heuristica_manhattan(inicio, destino)
@@ -164,7 +189,6 @@ def a_estrela(grid: Grid, inicio: No, destino: No) -> Resultado:
         heapq.heappush(fila, (h_inicio, contador, inicio, [inicio]))
         g_custos: dict[No, float] = {inicio: 0.0}
         fechados: set[No] = set()
-        nos_expandidos = 0
 
         while fila:
             _f, _c, atual, caminho = heapq.heappop(fila)
@@ -175,14 +199,10 @@ def a_estrela(grid: Grid, inicio: No, destino: No) -> Resultado:
             nos_expandidos += 1
 
             if atual == destino:
-                return Resultado(
-                    algoritmo=Algoritmo.A_ESTRELA,
-                    caminho=caminho,
-                    encontrou=True,
-                    nos_expandidos=nos_expandidos,
-                    custo_total=g_custos[atual],
-                    tempo_ms=t.tempo_ms,
-                )
+                caminho_final = caminho
+                custo_final = g_custos[atual]
+                encontrou = True
+                break
 
             g_atual = g_custos[atual]
 
@@ -196,6 +216,15 @@ def a_estrela(grid: Grid, inicio: No, destino: No) -> Resultado:
                     f = g_novo + heuristica_manhattan(vizinho, destino)
                     heapq.heappush(fila, (f, contador, vizinho, caminho + [vizinho]))
 
+    if encontrou:
+        return Resultado(
+            algoritmo=Algoritmo.A_ESTRELA,
+            caminho=caminho_final,
+            encontrou=True,
+            nos_expandidos=nos_expandidos,
+            custo_total=custo_final,
+            tempo_ms=t.tempo_ms,
+        )
     return Resultado(
         algoritmo=Algoritmo.A_ESTRELA,
         caminho=[],
@@ -210,4 +239,3 @@ def _calcular_custo(grid: Grid, caminho: list[No]) -> float:
         grid.peso(caminho[i], caminho[i + 1])
         for i in range(len(caminho) - 1)
     )
-

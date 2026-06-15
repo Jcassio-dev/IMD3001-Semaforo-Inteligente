@@ -35,6 +35,7 @@ class ConfigVisual:
     num_semaforos: int = 6
     num_incidentes: int = 3
     duracao_incidente: int = 20
+    prob_acidente: float = 0.05
     algoritmo_carros: Algoritmo = Algoritmo.A_ESTRELA
     seed: int | None = None
 
@@ -76,7 +77,7 @@ class Simulacao:
         self._congestionamento = SistemaCongestionamento(self.grid)
         self._acidentes = SistemaAcidentes(
             self.grid,
-            prob_acidente=0.05,
+            prob_acidente=config.prob_acidente,
             duracao_acidente=config.duracao_incidente,
             seed=config.seed,
         )
@@ -84,10 +85,6 @@ class Simulacao:
 
         self._criar_semaforos(config.num_semaforos)
         self._criar_carros(config.num_carros, config.algoritmo_carros)
-
-    # ------------------------------------------------------------------
-    # Setup
-    # ------------------------------------------------------------------
 
     def _criar_semaforos(self, quantidade: int) -> None:
         if quantidade <= 0:
@@ -144,9 +141,6 @@ class Simulacao:
             destino = self._rng.choice(universo)
         return origem, destino
 
-    # ------------------------------------------------------------------
-    # Tick
-    # ------------------------------------------------------------------
 
     def iniciar(self) -> None:
         pass
@@ -167,7 +161,7 @@ class Simulacao:
         self._congestionamento = SistemaCongestionamento(self.grid)
         self._acidentes = SistemaAcidentes(
             self.grid,
-            prob_acidente=0.05,
+            prob_acidente=self.config.prob_acidente,
             duracao_acidente=self.config.duracao_incidente,
             seed=self.config.seed,
         )
