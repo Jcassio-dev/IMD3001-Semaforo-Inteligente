@@ -134,7 +134,24 @@ python tests/test_metricas.py
 
 Heurística: distância de Manhattan ponderada pelo tamanho médio de célula.
 
+## Benchmark comparativo
+
+Roda cada algoritmo em múltiplas seeds com configuração idêntica e salva métricas em CSV.
+
+```bash
+# Padrão (1000 ticks, grid 10x10, 8 carros, 3 seeds)
+python benchmark.py
+
+# Configuração customizada
+python benchmark.py \
+  --ticks 500 --linhas 25 --colunas 25 --carros 30 \
+  --semaforos 15 --prob-acidente 0.08 --duracao-acidente 25 \
+  --seeds 42 123 456 789 1001 --output resultados.csv
+```
+
+Métricas coletadas por rodada: nós expandidos, custo médio, tempo de busca (ms), recálculos forçados, carros chegados e tempo médio até o destino. A tabela resumo com médias e desvios padrão é impressa ao final.
+
 ## Referências
 
-- Russell & Norvig — Artificial Intelligence: A Modern Approach, 4ª ed. (cap. 2-4)
-- CS188 Berkeley — Introduction to Artificial Intelligence
+- Russell & Norvig - Artificial Intelligence: A Modern Approach, 4ª ed. (cap. 2-4)
+- CS188 Berkeley - Introduction to Artificial Intelligence
